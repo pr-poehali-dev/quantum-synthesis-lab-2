@@ -2,20 +2,22 @@ import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 
 const SERVERS = [
-  { id: 1, label: "🏠" },
-  { id: 2, label: "🎮" },
-  { id: 3, label: "🎨" },
-  { id: 4, label: "💬" },
-  { id: 5, label: "🎵" },
+  { id: 1, label: "🏠", name: "Мой сервер" },
+  { id: 2, label: "🎮", name: "Игровой клуб" },
+  { id: 3, label: "🎨", name: "Арт-студия" },
+  { id: 4, label: "💬", name: "Болталка" },
+  { id: 5, label: "🎵", name: "Музыкальная" },
 ];
 
-const CHANNELS = [
-  { name: "общий", unread: true },
-  { name: "новости", unread: false },
-  { name: "знакомства", unread: false },
-  { name: "помощь", unread: true },
-  { name: "оффтоп", unread: false },
-];
+const SERVER_CHANNELS: Record<number, { name: string; unread: boolean }[]> = {
+  1: [{ name: "общий", unread: true }, { name: "новости", unread: false }, { name: "знакомства", unread: false }, { name: "помощь", unread: true }, { name: "оффтоп", unread: false }],
+  2: [{ name: "поиск-тиммейтов", unread: true }, { name: "стратегии", unread: false }, { name: "читы-жалобы", unread: false }, { name: "скриншоты", unread: true }],
+  3: [{ name: "галерея", unread: false }, { name: "вдохновение", unread: true }, { name: "критика", unread: false }, { name: "инструменты", unread: false }],
+  4: [{ name: "общий", unread: true }, { name: "мемы", unread: true }, { name: "жизнь", unread: false }, { name: "случайное", unread: false }],
+  5: [{ name: "рекомендации", unread: false }, { name: "плейлисты", unread: true }, { name: "новинки", unread: false }, { name: "концерты", unread: false }],
+};
+
+const CHANNELS = SERVER_CHANNELS[1];
 
 const VOICE_CHANNELS = ["Голосовой", "Музыка", "AFK"];
 
@@ -62,7 +64,7 @@ function getTime() {
 
 const Index = () => {
   const [activeServer, setActiveServer] = useState(1);
-  const [activeChannel, setActiveChannel] = useState("общий");
+  const [activeChannel, setActiveChannel] = useState(SERVER_CHANNELS[1][0].name);
   const [activeDm, setActiveDm] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -145,7 +147,7 @@ const Index = () => {
         {SERVERS.map((s) => (
           <button
             key={s.id}
-            onClick={() => { setActiveServer(s.id); setActiveDm(null); }}
+            onClick={() => { setActiveServer(s.id); setActiveDm(null); setActiveChannel(SERVER_CHANNELS[s.id][0].name); }}
             className={`w-12 h-12 flex items-center justify-center text-xl transition-all duration-200 relative
               ${s.id === activeServer ? "bg-[#5865f2] rounded-2xl" : "bg-white rounded-3xl hover:rounded-2xl hover:bg-[#5865f2]"}`}
           >
@@ -166,7 +168,7 @@ const Index = () => {
         absolute md:relative z-10 w-60 bg-[#e3e5e8] flex flex-col h-full transition-transform duration-200`}>
 
         <div className="px-4 py-3 border-b border-[#c4c9d4] flex items-center justify-between shadow-sm">
-          <h2 className="font-bold text-[#060607] text-base truncate">Мой сервер</h2>
+          <h2 className="font-bold text-[#060607] text-base truncate">{SERVERS.find(s => s.id === activeServer)?.name}</h2>
           <Icon name="ChevronDown" size={18} className="text-[#4e5058]" />
         </div>
 
@@ -204,7 +206,7 @@ const Index = () => {
               <Icon name="ChevronDown" size={12} />
               <span>Текстовые каналы</span>
             </div>
-            {CHANNELS.map((ch) => (
+            {SERVER_CHANNELS[activeServer].map((ch) => (
               <button key={ch.name}
                 onClick={() => { setActiveChannel(ch.name); setActiveDm(null); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-sm cursor-pointer transition-colors
@@ -212,7 +214,7 @@ const Index = () => {
               >
                 <Icon name="Hash" size={16} />
                 <span className="flex-1 text-left">{ch.name}</span>
-                {ch.unread && activeChannel !== ch.name && !activeDm && (
+                {ch.unread && (activeChannel !== ch.name || activeDm) && (
                   <div className="w-2 h-2 bg-[#060607] rounded-full" />
                 )}
               </button>
