@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+import { SnakeGame, TicTacToe, QuizGame } from "@/components/Games";
 
 const SERVERS = [
   { id: 1, label: "🏠", name: "Мой сервер" },
@@ -19,11 +20,6 @@ const SERVER_CHANNELS: Record<number, { name: string; unread: boolean }[]> = {
 
 const VOICE_CHANNELS = ["Голосовой", "Музыка", "AFK"];
 
-const GAMES = [
-  { id: 1, title: "Minecraft", genre: "Песочница", emoji: "⛏️", players: "127М игроков", color: "#5d7a3e", desc: "Строй, исследуй и выживай в бесконечном мире." },
-  { id: 2, title: "Valorant", genre: "Шутер", emoji: "🎯", players: "14М игроков", color: "#e84057", desc: "Тактический шутер от первого лица с уникальными агентами." },
-  { id: 3, title: "Genshin Impact", genre: "RPG", emoji: "⚔️", players: "60М игроков", color: "#c77dff", desc: "Открытый мир с элементальной магией и захватывающим сюжетом." },
-];
 
 const SONGS = [
   { id: 1, title: "Blinding Lights", artist: "The Weeknd", duration: "3:20", emoji: "🌃" },
@@ -98,6 +94,50 @@ const DM_GREETINGS: Record<string, string> = {
 function getTime() {
   const now = new Date();
   return `Сегодня в ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+const GAMES_CATALOG = [
+  { id: 1, title: "Змейка", emoji: "🐍", color: "#23a55a", desc: "Управляй змейкой, ешь еду и не врезайся. Скорость растёт!" },
+  { id: 2, title: "Крестики-нолики", emoji: "❌", color: "#5865f2", desc: "Сыграй с другом или против умного ИИ." },
+  { id: 3, title: "Викторина", emoji: "🧠", color: "#f0b232", desc: "10 вопросов, 15 секунд на каждый. Насколько ты умён?" },
+];
+
+function GamingHub({ headerBg, textMain, textMuted }: { headerBg: string; textMain: string; textMuted: string }) {
+  const [activeGame, setActiveGame] = useState<number | null>(null);
+  return (
+    <div className="flex flex-col h-full">
+      {activeGame === null ? (
+        <>
+          <h2 className="text-2xl font-bold mb-1" style={{ color: textMain }}>🎮 Игровой клуб</h2>
+          <p className="text-sm mb-6" style={{ color: textMuted }}>Три мини-игры прямо в чате — выбери и играй!</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {GAMES_CATALOG.map(game => (
+              <button key={game.id} onClick={() => setActiveGame(game.id)}
+                className="rounded-2xl overflow-hidden border border-black/10 hover:shadow-xl transition-all text-left hover:scale-[1.02] active:scale-[0.98]">
+                <div className="h-32 flex items-center justify-center text-7xl" style={{ background: game.color + "22" }}>{game.emoji}</div>
+                <div className="p-4" style={{ background: headerBg }}>
+                  <h3 className="font-bold text-base mb-1" style={{ color: textMain }}>{game.title}</h3>
+                  <p className="text-xs mb-3" style={{ color: textMuted }}>{game.desc}</p>
+                  <span className="text-xs font-semibold text-white px-4 py-1.5 rounded-full" style={{ background: game.color }}>Играть →</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-4">
+          <button onClick={() => setActiveGame(null)}
+            className="self-start text-sm px-3 py-1 rounded-lg mb-2 hover:bg-black/10 transition-colors flex items-center gap-1"
+            style={{ color: textMuted }}>
+            ← Назад к играм
+          </button>
+          {activeGame === 1 && <SnakeGame />}
+          {activeGame === 2 && <TicTacToe />}
+          {activeGame === 3 && <QuizGame />}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Index() {
@@ -283,27 +323,8 @@ export default function Index() {
 
             {/* === ИГРЫ === */}
             {isGaming && !activeDm && (
-              <div className="flex-1 overflow-y-auto p-6">
-                <h2 className="text-2xl font-bold mb-2" style={{ color: textMain }}>🎮 Игровой клуб</h2>
-                <p className="text-sm mb-6" style={{ color: textMuted }}>Выбери игру и присоединяйся к сообществу</p>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  {GAMES.map(game => (
-                    <div key={game.id} className="rounded-2xl overflow-hidden border border-black/10 hover:shadow-lg transition-shadow cursor-pointer group">
-                      <div className="h-28 flex items-center justify-center text-6xl" style={{ background: game.color + "33" }}>{game.emoji}</div>
-                      <div className="p-4" style={{ background: headerBg }}>
-                        <div className="flex items-start justify-between mb-1">
-                          <h3 className="font-bold text-base" style={{ color: textMain }}>{game.title}</h3>
-                          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: game.color + "22", color: game.color }}>{game.genre}</span>
-                        </div>
-                        <p className="text-xs mb-3" style={{ color: textMuted }}>{game.desc}</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs" style={{ color: textMuted }}>👥 {game.players}</span>
-                          <button className="text-xs px-3 py-1 rounded-full text-white font-semibold" style={{ background: game.color }}>Играть</button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <GamingHub headerBg={headerBg} textMain={textMain} textMuted={textMuted} />
               </div>
             )}
 
