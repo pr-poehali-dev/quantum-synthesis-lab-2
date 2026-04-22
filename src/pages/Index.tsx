@@ -90,6 +90,18 @@ const Index = () => {
   const [activeServer, setActiveServer] = useState(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [messages, setMessages] = useState(MESSAGES);
+
+  const sendMessage = () => {
+    if (!inputValue.trim()) return;
+    const now = new Date();
+    const time = `Сегодня в ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now(), author: "Пользователь", avatar: "Я", color: "#5865f2", time, text: inputValue.trim(), isBot: false },
+    ]);
+    setInputValue("");
+  };
 
   return (
     <div className="flex h-screen bg-[#f2f3f5] overflow-hidden font-sans">
@@ -249,8 +261,8 @@ const Index = () => {
               </div>
 
               {/* Сообщения */}
-              {MESSAGES.map((msg, i) => {
-                const isGrouped = i > 0 && MESSAGES[i - 1].author === msg.author;
+              {messages.map((msg, i) => {
+                const isGrouped = i > 0 && messages[i - 1].author === msg.author;
                 return (
                   <div
                     key={msg.id}
@@ -297,6 +309,7 @@ const Index = () => {
                   placeholder={`Написать в #${activeChannel}`}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 />
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button className="text-[#4e5058] hover:text-[#313338] transition-colors">
@@ -307,6 +320,7 @@ const Index = () => {
                   </button>
                   <button
                     className={`transition-colors ${inputValue ? "text-[#5865f2]" : "text-[#4e5058]"}`}
+                    onClick={sendMessage}
                   >
                     <Icon name="Send" size={20} />
                   </button>
