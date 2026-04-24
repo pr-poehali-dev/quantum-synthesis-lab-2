@@ -2,12 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { SnakeGame, TicTacToe, QuizGame } from "@/components/Games";
 
-const SERVERS = [
-  { id: 1, label: "🏠", name: "Мой сервер" },
-  { id: 2, label: "🎮", name: "Игровой клуб" },
-  { id: 3, label: "🎨", name: "Арт-студия" },
-  { id: 4, label: "💬", name: "Болталка" },
-  { id: 5, label: "🎵", name: "Музыкальная" },
+const DEFAULT_SERVERS = [
+  { id: 1, label: "🏠", name: "Мой сервер", isCustom: false },
+  { id: 2, label: "🎮", name: "Игровой клуб", isCustom: false },
+  { id: 3, label: "🎨", name: "Арт-студия", isCustom: false },
+  { id: 4, label: "💬", name: "Болталка", isCustom: false },
+  { id: 5, label: "🎵", name: "Музыкальная", isCustom: false },
 ];
 
 const SERVER_CHANNELS: Record<number, { name: string; unread: boolean }[]> = {
@@ -19,7 +19,6 @@ const SERVER_CHANNELS: Record<number, { name: string; unread: boolean }[]> = {
 };
 
 const VOICE_CHANNELS = ["Голосовой", "Музыка", "AFK"];
-
 
 const SONGS = [
   { id: 1, title: "Blinding Lights", artist: "The Weeknd", duration: "3:20", emoji: "🌃" },
@@ -72,16 +71,17 @@ const MEMBERS_OFFLINE = [
 const STATUS_COLORS: Record<string, string> = {
   "В сети": "#23a55a", "Не беспокоить": "#ed4245", "Отошёл": "#f0b232",
 };
-const CHANNEL_MESSAGES = [
-  { id: 1, author: "Александра", avatar: "А", color: "#5865f2", time: "Сегодня в 10:42", text: "Всем привет! Как дела? 👋" },
-  { id: 2, author: "Максим", avatar: "М", color: "#ed4245", time: "Сегодня в 10:43", text: "Привет! Отлично, только что запустил новый проект 🚀" },
-  { id: 3, author: "Катя", avatar: "К", color: "#faa61a", time: "Сегодня в 10:45", text: "Ребята, кто смотрел последний стрим? Там было что-то невероятное!" },
-  { id: 4, author: "Александра", avatar: "А", color: "#5865f2", time: "Сегодня в 10:47", text: "Да, я смотрела! Вообще огонь 🔥" },
-  { id: 5, author: "Максим", avatar: "М", color: "#ed4245", time: "Сегодня в 10:50", text: "Буду! Кто ещё идёт?" },
+const DEFAULT_CHANNEL_MESSAGES = [
+  { id: 1, author: "Александра", avatar: "А", color: "#5865f2", time: "Сегодня в 10:42", text: "Всем привет! Как дела? 👋", isVoice: false },
+  { id: 2, author: "Максим", avatar: "М", color: "#ed4245", time: "Сегодня в 10:43", text: "Привет! Отлично, только что запустил новый проект 🚀", isVoice: false },
+  { id: 3, author: "Катя", avatar: "К", color: "#faa61a", time: "Сегодня в 10:45", text: "Ребята, кто смотрел последний стрим? Там было что-то невероятное!", isVoice: false },
+  { id: 4, author: "Александра", avatar: "А", color: "#5865f2", time: "Сегодня в 10:47", text: "Да, я смотрела! Вообще огонь 🔥", isVoice: false },
+  { id: 5, author: "Максим", avatar: "М", color: "#ed4245", time: "Сегодня в 10:50", text: "Буду! Кто ещё идёт?", isVoice: false },
 ];
 
-type Message = { id: number; author: string; avatar: string; color: string; time: string; text: string };
+type Message = { id: number; author: string; avatar: string; color: string; time: string; text: string; isVoice?: boolean; audioUrl?: string };
 type DmChats = Record<string, Message[]>;
+type ServerItem = { id: number; label: string; name: string; isCustom: boolean };
 
 const DM_GREETINGS: Record<string, string> = {
   "Александра": "Привет! Чем могу помочь? 😊",
@@ -95,6 +95,26 @@ function getTime() {
   const now = new Date();
   return `Сегодня в ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch (e) {
+    void e;
+  }
+  return fallback;
+}
+
+function saveToStorage(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    void e;
+  }
+}
+
+const FOLDER_EMOJIS = ["📁", "🗂️", "📂", "🏷️", "⭐", "🔖", "💼", "🎯", "🔥", "💡"];
 
 const GAMES_CATALOG = [
   { id: 1, title: "Змейка", emoji: "🐍", color: "#23a55a", desc: "Управляй змейкой, ешь еду и не врезайся. Скорость растёт!" },
@@ -140,19 +160,96 @@ function GamingHub({ headerBg, textMain, textMuted }: { headerBg: string; textMa
   );
 }
 
+function VoiceMessagePlayer({ audioUrl, textMuted, inputBg }: { audioUrl: string; textMuted: string; inputBg: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const toggle = () => {
+    if (!audioRef.current) return;
+    if (playing) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setPlaying(!playing);
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl px-3 py-2 max-w-xs" style={{ background: inputBg }}>
+      <audio ref={audioRef}
+        src={audioUrl}
+        onTimeUpdate={() => {
+          if (audioRef.current) setProgress((audioRef.current.currentTime / (audioRef.current.duration || 1)) * 100);
+        }}
+        onLoadedMetadata={() => { if (audioRef.current) setDuration(audioRef.current.duration); }}
+        onEnded={() => { setPlaying(false); setProgress(0); }}
+      />
+      <button onClick={toggle} className="w-8 h-8 rounded-full bg-[#5865f2] flex items-center justify-center flex-shrink-0 text-white">
+        {playing ? "⏸" : "▶"}
+      </button>
+      <div className="flex flex-col gap-1 flex-1">
+        <div className="h-1.5 rounded-full bg-black/10 overflow-hidden">
+          <div className="h-full bg-[#5865f2] rounded-full transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        <span className="text-xs" style={{ color: textMuted }}>
+          🎤 {duration ? `${Math.floor(duration)}с` : "Голосовое"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function Index() {
-  const [activeServer, setActiveServer] = useState(1);
-  const [activeChannel, setActiveChannel] = useState(SERVER_CHANNELS[1][0].name);
+  const [servers, setServers] = useState<ServerItem[]>(() =>
+    loadFromStorage("chat_servers", DEFAULT_SERVERS)
+  );
+  const [activeServer, setActiveServer] = useState(() =>
+    loadFromStorage("chat_activeServer", 1)
+  );
+  const [activeChannel, setActiveChannel] = useState(() =>
+    loadFromStorage("chat_activeChannel", SERVER_CHANNELS[1][0].name)
+  );
   const [activeDm, setActiveDm] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [channelMessages, setChannelMessages] = useState(CHANNEL_MESSAGES);
-  const [dmChats, setDmChats] = useState<DmChats>({});
+  const [channelMessages, setChannelMessages] = useState<Message[]>(() =>
+    loadFromStorage("chat_channelMessages", DEFAULT_CHANNEL_MESSAGES)
+  );
+  const [dmChats, setDmChats] = useState<DmChats>(() =>
+    loadFromStorage("chat_dmChats", {})
+  );
   const [typing, setTyping] = useState(false);
   const [playingId, setPlayingId] = useState<number | null>(null);
-  const [activeTheme, setActiveTheme] = useState("light");
-  const [activeWallpaper, setActiveWallpaper] = useState<number | null>(null);
+  const [activeTheme, setActiveTheme] = useState(() =>
+    loadFromStorage("chat_theme", "light")
+  );
+  const [activeWallpaper, setActiveWallpaper] = useState<number | null>(() =>
+    loadFromStorage("chat_wallpaper", null)
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Модалка создания папки/сервера
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderEmoji, setNewFolderEmoji] = useState("📁");
+
+  // Запись голоса
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Сохранение в localStorage при изменениях
+  useEffect(() => { saveToStorage("chat_servers", servers); }, [servers]);
+  useEffect(() => { saveToStorage("chat_activeServer", activeServer); }, [activeServer]);
+  useEffect(() => { saveToStorage("chat_activeChannel", activeChannel); }, [activeChannel]);
+  useEffect(() => { saveToStorage("chat_theme", activeTheme); }, [activeTheme]);
+  useEffect(() => { saveToStorage("chat_wallpaper", activeWallpaper); }, [activeWallpaper]);
+  useEffect(() => { saveToStorage("chat_channelMessages", channelMessages); }, [channelMessages]);
+  useEffect(() => { saveToStorage("chat_dmChats", dmChats); }, [dmChats]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -166,7 +263,7 @@ export default function Index() {
     setActiveDm(name); setSidebarOpen(false);
     if (!dmChats[name]) {
       const member = allMembers.find(m => m.name === name)!;
-      setDmChats(prev => ({ ...prev, [name]: [{ id: 1, author: name, avatar: member.avatar, color: member.color, time: getTime(), text: DM_GREETINGS[name] || "Привет!" }] }));
+      setDmChats(prev => ({ ...prev, [name]: [{ id: 1, author: name, avatar: member.avatar, color: member.color, time: getTime(), text: DM_GREETINGS[name] || "Привет!", isVoice: false }] }));
     }
   };
 
@@ -175,28 +272,95 @@ export default function Index() {
     const text = inputValue.trim(); setInputValue("");
     if (activeDm) {
       const member = allMembers.find(m => m.name === activeDm)!;
-      const myMsg: Message = { id: Date.now(), author: "Пользователь", avatar: "Я", color: "#5865f2", time: getTime(), text };
+      const myMsg: Message = { id: Date.now(), author: "Пользователь", avatar: "Я", color: "#5865f2", time: getTime(), text, isVoice: false };
       setDmChats(prev => ({ ...prev, [activeDm]: [...(prev[activeDm] || []), myMsg] }));
       setTyping(true);
       setTimeout(() => {
         const replies = ["Интересно! Расскажи подробнее 🙂", "Понял тебя, хорошая мысль!", "Ага, согласен 👍", "Хм, надо подумать...", "Отлично!", "Окей 😊", "Да, именно так!", "Не совсем понял, объясни?"];
-        const reply: Message = { id: Date.now() + 1, author: activeDm, avatar: member.avatar, color: member.color, time: getTime(), text: replies[Math.floor(Math.random() * replies.length)] };
+        const reply: Message = { id: Date.now() + 1, author: activeDm, avatar: member.avatar, color: member.color, time: getTime(), text: replies[Math.floor(Math.random() * replies.length)], isVoice: false };
         setDmChats(prev => ({ ...prev, [activeDm]: [...(prev[activeDm] || []), reply] }));
         setTyping(false);
       }, 1000 + Math.random() * 1000);
     } else {
-      setChannelMessages(prev => [...prev, { id: Date.now(), author: "Пользователь", avatar: "Я", color: "#5865f2", time: getTime(), text }]);
+      setChannelMessages(prev => [...prev, { id: Date.now(), author: "Пользователь", avatar: "Я", color: "#5865f2", time: getTime(), text, isVoice: false }]);
     }
+  };
+
+  // Создание новой папки/сервера
+  const handleAddFolder = () => {
+    if (!newFolderName.trim()) return;
+    const newId = Date.now();
+    const newServer: ServerItem = {
+      id: newId,
+      label: newFolderEmoji,
+      name: newFolderName.trim(),
+      isCustom: true,
+    };
+    setServers(prev => [...prev, newServer]);
+    // Добавляем каналы для нового сервера
+    SERVER_CHANNELS[newId] = [{ name: "общий", unread: false }];
+    setNewFolderName("");
+    setNewFolderEmoji("📁");
+    setShowAddModal(false);
+  };
+
+  // Запись голоса
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(s => s + 1);
+      }, 1000);
+    } catch {
+      alert("Нет доступа к микрофону");
+    }
+  };
+
+  const stopRecording = () => {
+    if (!mediaRecorderRef.current) return;
+    mediaRecorderRef.current.onstop = () => {
+      const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+      const audioUrl = URL.createObjectURL(blob);
+      const voiceMsg: Message = {
+        id: Date.now(),
+        author: "Пользователь",
+        avatar: "Я",
+        color: "#5865f2",
+        time: getTime(),
+        text: "",
+        isVoice: true,
+        audioUrl,
+      };
+      if (activeDm) {
+        setDmChats(prev => ({ ...prev, [activeDm!]: [...(prev[activeDm!] || []), voiceMsg] }));
+      } else {
+        setChannelMessages(prev => [...prev, voiceMsg]);
+      }
+      mediaRecorderRef.current?.stream.getTracks().forEach(t => t.stop());
+    };
+    mediaRecorderRef.current.stop();
+    setIsRecording(false);
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setRecordingSeconds(0);
   };
 
   const currentMessages = activeDm ? (dmChats[activeDm] || []) : channelMessages;
   const currentMember = activeDm ? allMembers.find(m => m.name === activeDm) : null;
 
-  // Специальный контент для серверов
   const isGaming = activeServer === 2;
   const isArt = activeServer === 3;
   const isMusic = activeServer === 5;
-  const isSpecial = isGaming || isArt || isMusic;
+  const isCustomServer = servers.find(s => s.id === activeServer)?.isCustom ?? false;
+  const isSpecial = (isGaming || isArt || isMusic) && !isCustomServer;
 
   const sidebarBg = activeTheme === "dark" ? "#2b2d31" : activeTheme === "colorful" ? "#e9d5ff" : "#e3e5e8";
   const chatBg = wallpaper ? "transparent" : (activeTheme === "dark" ? "#313338" : activeTheme === "colorful" ? "#fdf4ff" : "#f2f3f5");
@@ -213,27 +377,84 @@ export default function Index() {
         <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ background: wallpaper.gradient }} />
       )}
 
+      {/* Модалка создания папки */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAddModal(false)}>
+          <div className="rounded-2xl p-6 w-80 shadow-2xl" style={{ background: headerBg }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold mb-4" style={{ color: textMain }}>Новая папка</h2>
+            <div className="mb-3">
+              <label className="text-xs font-semibold uppercase tracking-wider mb-1 block" style={{ color: textMuted }}>Значок</label>
+              <div className="flex flex-wrap gap-2">
+                {FOLDER_EMOJIS.map(emoji => (
+                  <button key={emoji}
+                    onClick={() => setNewFolderEmoji(emoji)}
+                    className="w-9 h-9 rounded-lg text-lg flex items-center justify-center transition-all"
+                    style={{ background: newFolderEmoji === emoji ? "#5865f2" : inputBg, transform: newFolderEmoji === emoji ? "scale(1.1)" : "scale(1)" }}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs font-semibold uppercase tracking-wider mb-1 block" style={{ color: textMuted }}>Название папки</label>
+              <input
+                autoFocus
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                style={{ background: inputBg, color: textMain }}
+                placeholder="Например: Работа, Друзья..."
+                value={newFolderName}
+                onChange={e => setNewFolderName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAddFolder()}
+                maxLength={30}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowAddModal(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-black/10"
+                style={{ color: textMuted }}>
+                Отмена
+              </button>
+              <button onClick={handleAddFolder}
+                disabled={!newFolderName.trim()}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-40"
+                style={{ background: "#5865f2" }}>
+                Создать
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Сайдбар серверов */}
-      <div className="w-[72px] flex flex-col items-center py-3 gap-2 flex-shrink-0 z-20" style={{ background: sidebarBg }}>
-        {SERVERS.map((s) => (
+      <div className="w-[72px] flex flex-col items-center py-3 gap-2 flex-shrink-0 z-20 overflow-y-auto" style={{ background: sidebarBg }}>
+        {servers.map((s) => (
           <button key={s.id}
-            onClick={() => { setActiveServer(s.id); setActiveDm(null); setActiveChannel(SERVER_CHANNELS[s.id][0].name); }}
-            className={`w-12 h-12 flex items-center justify-center text-xl transition-all duration-200 relative
+            onClick={() => {
+              setActiveServer(s.id);
+              setActiveDm(null);
+              const channels = SERVER_CHANNELS[s.id];
+              setActiveChannel(channels ? channels[0].name : "общий");
+            }}
+            className={`w-12 h-12 flex items-center justify-center text-xl transition-all duration-200 relative flex-shrink-0
               ${s.id === activeServer ? "bg-[#5865f2] rounded-2xl" : "bg-white/80 rounded-3xl hover:rounded-2xl hover:bg-[#5865f2]"}`}
           >
             {s.id === activeServer && <div className="absolute left-0 w-1 h-8 bg-black/30 rounded-r-full -translate-x-[4px]" />}
             {s.label}
           </button>
         ))}
-        <div className="w-8 h-px bg-black/10 my-1" />
-        <button className="w-12 h-12 bg-white/80 rounded-3xl hover:rounded-2xl hover:bg-[#23a55a] flex items-center justify-center transition-all duration-200 text-[#23a55a] hover:text-white text-xl font-bold">+</button>
+        <div className="w-8 h-px bg-black/10 my-1 flex-shrink-0" />
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="w-12 h-12 bg-white/80 rounded-3xl hover:rounded-2xl hover:bg-[#23a55a] flex items-center justify-center transition-all duration-200 text-[#23a55a] hover:text-white text-xl font-bold flex-shrink-0">
+          +
+        </button>
       </div>
 
       {/* Сайдбар каналов */}
       <div className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 absolute md:relative z-10 w-60 flex flex-col h-full transition-transform duration-200`}
         style={{ background: sidebarBg }}>
         <div className="px-4 py-3 border-b border-black/10 flex items-center justify-between shadow-sm">
-          <h2 className="font-bold text-base truncate" style={{ color: textMain }}>{SERVERS.find(s => s.id === activeServer)?.name}</h2>
+          <h2 className="font-bold text-base truncate" style={{ color: textMain }}>{servers.find(s => s.id === activeServer)?.name}</h2>
           <Icon name="ChevronDown" size={18} style={{ color: textMuted }} />
         </div>
         <div className="flex-1 overflow-y-auto py-2 px-2">
@@ -258,7 +479,7 @@ export default function Index() {
             <div className="flex items-center gap-1 px-2 py-1 text-xs font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
               <Icon name="ChevronDown" size={12} /><span>Текстовые каналы</span>
             </div>
-            {SERVER_CHANNELS[activeServer].map((ch) => (
+            {(SERVER_CHANNELS[activeServer] || [{ name: "общий", unread: false }]).map((ch) => (
               <button key={ch.name} onClick={() => { setActiveChannel(ch.name); setActiveDm(null); setSidebarOpen(false); }}
                 className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-sm cursor-pointer transition-colors hover:bg-black/10"
                 style={{ color: !activeDm && activeChannel === ch.name ? textMain : textMuted, fontWeight: !activeDm && activeChannel === ch.name ? 600 : 400 }}>
@@ -418,19 +639,19 @@ export default function Index() {
             )}
 
             {/* === ОБЫЧНЫЙ ЧАТ === */}
-            {!isSpecial && (
+            {(!isSpecial || activeDm) && (
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
                 <div className="mb-6 pb-4 border-b border-black/10">
                   {activeDm && currentMember ? (
                     <>
                       <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3" style={{ background: currentMember.color }}>{currentMember.avatar}</div>
                       <h2 className="text-2xl font-bold mb-1" style={{ color: textMain }}>{activeDm}</h2>
-                      <p className="text-sm" style={{ color: textMuted }}>Начало разговора с <strong>{activeDm}</strong>.</p>
+                      <p className="text-sm" style={{ color: textMuted }}>Начало вашей переписки с {activeDm}</p>
                     </>
                   ) : (
                     <>
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ background: inputBg }}>
-                        <Icon name="Hash" size={24} style={{ color: textMuted }} />
+                      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3 text-3xl" style={{ background: inputBg }}>
+                        <Icon name="Hash" size={32} style={{ color: textMuted }} />
                       </div>
                       <h2 className="text-2xl font-bold mb-1" style={{ color: textMain }}>Добро пожаловать в #{activeChannel}!</h2>
                       <p className="text-sm" style={{ color: textMuted }}>Это начало канала #{activeChannel}.</p>
@@ -438,13 +659,15 @@ export default function Index() {
                   )}
                 </div>
                 {currentMessages.map((msg, i) => {
-                  const isGrouped = i > 0 && currentMessages[i - 1].author === msg.author;
+                  const prev = currentMessages[i - 1];
+                  const isGrouped = prev && prev.author === msg.author && !msg.isVoice && !prev.isVoice;
                   return (
-                    <div key={msg.id} className={`flex gap-3 group rounded px-2 py-0.5 transition-colors ${isGrouped ? "" : "mt-4"}`}
+                    <div key={msg.id}
+                      className={`flex gap-3 px-2 py-0.5 rounded-lg group transition-colors ${isGrouped ? "mt-0" : "mt-3"}`}
                       onMouseEnter={e => (e.currentTarget.style.background = msgHover)}
                       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                       {!isGrouped ? (
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-white font-semibold text-sm" style={{ background: msg.color }}>{msg.avatar}</div>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-sm" style={{ background: msg.color }}>{msg.avatar}</div>
                       ) : (
                         <div className="w-10 flex-shrink-0 flex items-center justify-end">
                           <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: textMuted }}>{msg.time.split(" ").slice(-2).join(" ")}</span>
@@ -457,7 +680,11 @@ export default function Index() {
                             <span className="text-xs" style={{ color: textMuted }}>{msg.time}</span>
                           </div>
                         )}
-                        <p className="text-sm leading-relaxed" style={{ color: activeTheme === "dark" ? "#dbdee1" : textMain }}>{msg.text}</p>
+                        {msg.isVoice && msg.audioUrl ? (
+                          <VoiceMessagePlayer audioUrl={msg.audioUrl} textMuted={textMuted} inputBg={inputBg} />
+                        ) : (
+                          <p className="text-sm leading-relaxed" style={{ color: activeTheme === "dark" ? "#dbdee1" : textMain }}>{msg.text}</p>
+                        )}
                       </div>
                     </div>
                   );
@@ -479,6 +706,16 @@ export default function Index() {
             {/* Поле ввода — только не для специальных серверов */}
             {(!isSpecial || activeDm) && (
               <div className="px-4 pb-4 flex-shrink-0">
+                {isRecording && (
+                  <div className="flex items-center gap-3 rounded-lg px-4 py-2 mb-2" style={{ background: "#ed424522" }}>
+                    <span className="w-2 h-2 rounded-full bg-[#ed4245] animate-pulse" />
+                    <span className="text-sm font-medium text-[#ed4245]">Запись... {recordingSeconds}с</span>
+                    <button onClick={stopRecording}
+                      className="ml-auto text-xs font-semibold text-white px-3 py-1 rounded-full bg-[#ed4245]">
+                      Стоп
+                    </button>
+                  </div>
+                )}
                 <div className="rounded-lg flex items-center gap-2 px-4 py-3" style={{ background: inputBg }}>
                   <button className="flex-shrink-0 transition-colors" style={{ color: textMuted }}><Icon name="Plus" size={20} /></button>
                   <input className="flex-1 bg-transparent text-sm outline-none"
@@ -488,6 +725,16 @@ export default function Index() {
                     onChange={e => setInputValue(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && sendMessage()} />
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onMouseDown={startRecording}
+                      onMouseUp={stopRecording}
+                      onTouchStart={startRecording}
+                      onTouchEnd={stopRecording}
+                      title="Удерживай для записи голоса"
+                      style={{ color: isRecording ? "#ed4245" : textMuted }}
+                      className="transition-colors">
+                      <Icon name="Mic" size={20} />
+                    </button>
                     <button style={{ color: textMuted }}><Icon name="Smile" size={20} /></button>
                     <button onClick={sendMessage} style={{ color: inputValue ? "#5865f2" : textMuted }}><Icon name="Send" size={20} /></button>
                   </div>
