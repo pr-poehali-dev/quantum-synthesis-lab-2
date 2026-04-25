@@ -502,7 +502,7 @@ export default function Index() {
         </div>
         <div className="p-2 border-t border-black/10 flex items-center gap-2" style={{ background: activeTheme === "dark" ? "#1e1f22" : "rgba(0,0,0,0.05)" }}>
           <div className="relative flex-shrink-0">
-            <div className="w-8 h-8 bg-[#5865f2] rounded-full flex items-center justify-center"><span className="text-white text-sm font-semibold">Я</span></div>
+            <div className="w-8 h-8 flex items-center justify-center bg-red-600 rounded-full"><span className="text-white text-sm font-semibold">Я</span></div>
             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#23a55a] border-2 rounded-full" style={{ borderColor: sidebarBg }} />
           </div>
           <div className="flex-1 min-w-0">
