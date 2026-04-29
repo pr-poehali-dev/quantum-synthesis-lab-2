@@ -667,7 +667,7 @@ export default function Index() {
                       onMouseEnter={e => (e.currentTarget.style.background = msgHover)}
                       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                       {!isGrouped ? (
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-sm" style={{ background: msg.color }}>{msg.avatar}</div>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-sm bg-lime-400" style={{ background: msg.color }}>{msg.avatar}</div>
                       ) : (
                         <div className="w-10 flex-shrink-0 flex items-center justify-end">
                           <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: textMuted }}>{msg.time.split(" ").slice(-2).join(" ")}</span>
@@ -753,7 +753,7 @@ export default function Index() {
                   onMouseEnter={e => (e.currentTarget.style.background = msgHover)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                   <div className="relative flex-shrink-0">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ background: m.color }}>{m.avatar}</div>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold bg-lime-400" style={{ background: m.color }}>{m.avatar}</div>
                     <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 rounded-full" style={{ background: STATUS_COLORS[m.status], borderColor: chatBg }} />
                   </div>
                   <div className="flex-1 min-w-0 text-left">
